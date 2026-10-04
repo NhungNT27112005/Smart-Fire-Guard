@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Smart Fire Guard - Hệ Thống Báo Cháy Thông Minh IoT</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span>🔥 SMART FIRE GUARD</span>
+      <span class="sub-brand">Node.js & ESP32 Cloud System</span>
+    </div>
+    <div class="status-group">
+      <span id="hw-status" class="pill hw-pill">📡 ESP32: Checking...</span>
+      <span id="sys" class="pill">🟢 SYSTEM ONLINE</span>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <nav id="nav">
+      <button class="on" data-v="dash">🏠 Dashboard</button>
+      <button data-v="sens">📊 Sensors</button>
+      <button data-v="cam">📷 Camera</button>
+      <button data-v="alerts">⚠️ Alerts</button>
+      <button data-v="hist">📜 History</button>
+      <button data-v="iot">🛠️ ESP32 IoT Setup</button>
+    </nav>
+
+    <main>
+      <!-- SECTION 1: DASHBOARD -->
+      <section id="dash" class="view on">
+        <h2>TRẠNG THÁI HIỆN TẠI</h2>
+        <div class="grid">
+          <div class="card" id="c-t">
+            <div class="i">🌡️</div>
+            <div class="v" id="t">32°C</div>
+            <div class="s ok" id="t-s">Normal</div>
+          </div>
+          <div class="card" id="c-s">
+            <div class="i">💨</div>
+            <div class="v" id="s">12%</div>
+            <div class="s ok" id="s-s">Normal</div>
+          </div>
+          <div class="card" id="c-f">
+            <div class="i">🔥</div>
+            <div class="v" id="f">NORMAL</div>
+            <div class="s ok">Flame</div>
+          </div>
+          <div class="card" id="c-a">
+            <div class="i">🤖</div>
+            <div class="v" id="a">NORMAL</div>
+            <div class="s ok">AI</div>
+          </div>
+        </div>
+
+        <h2>CAMERA SIMULATION & AI DETECT</h2>
+        <div class="cam" id="cam1">
+          <span class="rec">● LIVE FEED</span>
+          <div class="box" id="ai-box"></div>
+          <div style="font-size:36px">📷</div>
+          <div style="font-weight: 700; margin-top: 4px;">LIVE CAMERA [ESP32-CAM Stream]</div>
+          <small>[ Khu vực thiết bị điện & Phòng lưu trữ ]</small>
+        </div>
+        <div class="det" id="det">AI Detection: ✓ No fire detected</div>
+
+        <h2>SENSOR DATA QUICK VIEW</h2>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+          <div class="card">Temperature: <b id="d-t">32°C</b></div>
+          <div class="card">Smoke: <b id="d-s">12%</b></div>
+          <div class="card">Flame: <b id="d-f">Normal</b></div>
+          <div class="card">Gas: <b id="d-g">Normal</b></div>
+        </div>
+      </section>
+
+      <!-- SECTION 2: SENSORS METRICS -->
+      <section id="sens" class="view">
+        <h2>CHI TIẾT CẢM BIẾN REAL-TIME</h2>
+        <div class="sensor-row">
+          <div>Nhiệt độ (DHT11/22): <b id="b-t">32°C</b></div>
+          <div class="bar"><i id="p-t"></i></div>
+        </div>
+        <div class="sensor-row">
+          <div>Khói (MQ-2): <b id="b-s">12%</b></div>
+          <div class="bar"><i id="p-s"></i></div>
+        </div>
+        <div class="sensor-row">
+          <div>Gas (MQ-135): <b id="b-g">5%</b></div>
+          <div class="bar"><i id="p-g"></i></div>
+        </div>
+
+        <h2 style="margin-top:20px;">BẢNG NGƯỠNG CẢNH BÁO HỆ THỐNG</h2>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Cảm biến</th><th>Ngưỡng cảnh báo (WARN)</th><th>Ngưỡng nguy hiểm (DANGER)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Nhiệt độ</td><td>&gt; 45°C</td><td>&gt; 60°C</td></tr>
+              <tr><td>Khói</td><td>&gt; 30%</td><td>&gt; 60%</td></tr>
+              <tr><td>Gas</td><td>&gt; 30%</td><td>&gt; 60%</td></tr>
+              <tr><td>Cảm biến lửa (Flame)</td><td>Mức Thấp</td><td>Phát hiện ngọn lửa (Flame Detected)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 3: CAMERA STREAM -->
+      <section id="cam" class="view">
+        <h2>GIÁM SÁT CAMERA AI</h2>
+        <div class="cam" id="cam2">
+          <span class="rec">● LIVE STREAM</span>
+          <div class="box" id="ai-box2"></div>
+          <div style="font-size:36px">📷</div>
+          <div style="font-weight: 700; margin-top: 4px;">Khu vực thiết bị điện & Tủ trung tâm</div>
+        </div>
+        <div class="det" id="det2">AI Detection: ✓ No fire detected</div>
+        <div class="cam-config">
+          <p style="color:var(--mute);font-size:13px; margin-top:10px;">
+            💡 <b>Kết nối ESP32-CAM thật:</b> Bạn có thể gắn URL MJPEG Stream của ESP32-CAM (Ví dụ: <code>http://192.168.1.150:81/stream</code>) vào thẻ <code>&lt;img&gt;</code> dưới đây.
+          </p>
+        </div>
+      </section>
+
+      <!-- SECTION 4: ALERTS & CONTROLS -->
+      <section id="alerts" class="view">
+        <h2>ĐIỀU KHIỂN & CẢNH BÁO TẠI CHỖ</h2>
+        <div class="btns">
+          <button class="danger" id="sim">🔥 Giả lập cháy</button>
+          <button id="rst">✅ Reset hệ thống</button>
+          <button id="btn-sound" class="secondary">🔊 Âm thanh còi: Đang Bật</button>
+        </div>
+        <div id="active" class="card" style="text-align:left; font-size:16px;">
+          Không có cảnh báo.
+        </div>
+      </section>
+
+      <!-- SECTION 5: EVENT HISTORY -->
+      <section id="hist" class="view">
+        <div class="hist-header">
+          <h2>LỊCH SỬ SỰ KIỆN (CƠ SỞ DỮ LIỆU SQLITE)</h2>
+          <button id="clear-log-btn" class="sm-btn">🗑️ Xóa lịch sử</button>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Thời gian</th><th>Mức độ</th><th>Nội dung sự kiện</th></tr>
+            </thead>
+            <tbody id="log">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SECTION 6: IOT ARCHITECTURE & ESP32 SETUP GUIDE -->
+      <section id="iot" class="view">
+        <h2>SƠ ĐỒ HỆ THỐNG IOT & HƯỚNG DẪN KẾT NỐI ESP32</h2>
+        
+        <div class="architecture-card card" style="text-align: left; padding: 20px;">
+          <h3>📐 Sơ đồ kiến trúc (System Flow)</h3>
+          <pre class="ascii-diagram">
++-------------------------------------------------------+
+|                       LOCAL                           |
+|  Sensors (DHT11, MQ2, Flame) + Camera (ESP32-CAM)     |
+|                       |                               |
+|                       v                               |
+|                     ESP32                             |
+|                       |                               |
+|                       v                               |
+|                 Buzzer + LED                          |
++-------------------------------------------------------+
+                        |
+                  WiFi / HTTP POST
+                        |
+                        v
++-------------------------------------------------------+
+|                       CLOUD                           |
+|        REST API (/api/sensor-data) / WebSocket        |
+|                       |                               |
+|                       v                               |
+|             Database (SQLite) <--- AI                 |
+|                       |                               |
+|                       v                               |
+|          Web Dashboard (Live Control)                 |
++-------------------------------------------------------+
+          </pre>
+        </div>
+
+        <div class="code-card card" style="text-align: left; margin-top: 16px; padding: 20px;">
+          <h3>💻 Endpoint HTTP POST cho ESP32</h3>
+          <p>ESP32 của bạn sẽ gửi dữ liệu định kỳ đến URL Server Node.js bằng định dạng JSON:</p>
+          <div class="code-block">
+            <b>URL:</b> <code>http://&lt;SERVER_IP&gt;:3000/api/sensor-data</code><br>
+            <b>Method:</b> <code>POST</code><br>
+            <b>Header:</b> <code>Content-Type: application/json</code><br>
+            <b>Payload JSON:</b>
+            <pre>
+{
+  "temperature": 35.2,
+  "smoke": 14.5,
+  "gas": 8.0,
+  "flame": 0
+}
+            </pre>
+          </div>
+          <p style="margin-top: 12px;"><b>Phản hồi từ Server Node.js gửi lại ESP32:</b></p>
+          <pre>
+{
+  "success": true,
+  "status": "bad",
+  "alarmActive": true,
+  "buzzerCommand": "BUZZER_ON"
+}
+          </pre>
+          <p style="margin-top: 12px; color: var(--mute);">
+            📄 Bạn có thể tìm thấy file source code C++ hoàn chỉnh cho ESP32 trong thư mục <code>esp32/esp32_fire_guard.ino</code> của dự án này.
+          </p>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

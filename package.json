@@ -1,0 +1,27 @@
+{
+  "name": "smart-fire-guard",
+  "version": "1.0.0",
+  "description": "Smart Fire Guard Node.js IoT System with Real-time Dashboard and ESP32 Integration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "iot",
+    "esp32",
+    "fire-alarm",
+    "nodejs",
+    "express",
+    "socket.io",
+    "smart-home"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1",
+    "sqlite3": "^5.1.7"
+  }
+}
