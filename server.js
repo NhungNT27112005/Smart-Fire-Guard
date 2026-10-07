@@ -29,6 +29,19 @@ app.use('/api', apiRoutes);
 io.on('connection', (socket) => {
   console.log(`[WebSocket] Web Dashboard client connected: ${socket.id}`);
   
+  // Hứng sự kiện web gửi ảnh lên
+  socket.on('analyze_ai_frame', (data) => {
+      // Chỗ này gọi hàm AI của bạn (ví dụ gọi module aiDetector)
+      // Tạm thời fake logic để test UI:
+      const fakeAiResult = {
+          hasFire: Math.random() > 0.8, // Xác suất 20% random ra cháy để test
+          confidence: (Math.random() * 20 + 80).toFixed(1) // Random 80-100%
+      };
+      
+      // Trả kết quả ngược lại cho web
+      socket.emit('ai_result', fakeAiResult);
+  });
+
   socket.on('disconnect', () => {
     console.log(`[WebSocket] Client disconnected: ${socket.id}`);
   });
@@ -84,4 +97,5 @@ server.on('error', (err) => {
 });
 
 startServer(PORT);
+
 

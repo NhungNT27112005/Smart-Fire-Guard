@@ -1,44 +1,43 @@
-/**
- * AI Fire Detection Engine (Computer Vision / Sensor AI Integration)
- * Evaluates camera frames & sensor data for fire risk assessment
- */
+// Biến lưu thời gian giữ trạng thái báo động (debounce)
+let fireHoldTime = 0;
+const HOLD_DURATION = 10000; // Giữ báo động 10000 mili-giây (10 giây) sau khi AI mất dấu lửa
 
-class AIDetector {
-  constructor() {
-    this.modelName = "YOLOv8-FireGuard-v2";
-    this.isOnline = true;
-  }
-
-  /**
-   * Analyze simulated or real camera image frame / sensor values
-   */
-  analyzeFrame(imageBufferOrUrl, sensorData = {}) {
-    const isFire = sensorData.fire || sensorData.temperature > 60 || sensorData.smoke > 60 || sensorData.flame;
-    
-    if (isFire) {
-      const confidence = (88 + Math.random() * 10).toFixed(1);
-      return {
-        hasFire: true,
-        confidence: parseFloat(confidence),
-        statusText: `AI Detection: 🚨 FIRE DETECTED (độ tin cậy ${confidence}%)`,
-        boundingBox: {
-          x: 25 + Math.floor(Math.random() * 5),
-          y: 25 + Math.floor(Math.random() * 5),
-          width: 40,
-          height: 40
-        },
-        recommendation: "KÍCH HOẠT CÒI BÁO ĐỘNG VÀ TỰ ĐỘNG THÔNG BÁO PCCC!"
-      };
-    } else {
-      return {
-        hasFire: false,
-        confidence: 99.2,
-        statusText: "AI Detection: ✓ No fire detected",
-        boundingBox: null,
-        recommendation: "Hệ thống an toàn"
-      };
+exports.analyzeFrame = async function(imageData) {
+    if (!imageData) {
+        return { hasFire: false, confidence: 0, statusText: 'AI Detection: ⏳ Đang chờ hình ảnh...' };
     }
-  }
-}
 
-module.exports = new AIDetector();
+    try {
+        const response = await fetch('http://127.0.0.1:5000/detect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: imageData })
+        });
+
+        const result = await response.json();
+        
+        let finalHasFire = result.hasFire;
+        let displayConf = result.confidence;
+
+        // --- LOGIC CHỐNG NHIỄU GIẬT CỤC ---
+        if (result.hasFire) {
+            // Nhìn thấy lửa -> Cập nhật mốc thời gian báo động mới nhất
+            fireHoldTime = Date.now() + HOLD_DURATION;
+        } else if (Date.now() < fireHoldTime) {
+            // AI không thấy lửa, nhưng vẫn đang trong thời gian 5 giây đếm ngược -> Ép bật cảnh báo
+            finalHasFire = true;
+            displayConf = "Đang duy trì"; 
+        }
+
+        return {
+            hasFire: finalHasFire,
+            confidence: displayConf,
+            statusText: finalHasFire 
+                ? `🔥 AI Detection: Phát hiện nguy cơ! (${displayConf}${typeof displayConf === 'number' ? '%' : ''})` 
+                : `✓ AI Detection: An toàn`
+        };
+    } catch (error) {
+        console.error("[AI Error] Lỗi kết nối tới Python Server:", error.message);
+        return { hasFire: false, confidence: 0, statusText: '⚠️ AI Detection: Mất kết nối AI Server' };
+    }
+};
