@@ -24,7 +24,7 @@ exports.analyzeFrame = async function(imageData) {
             // Nhìn thấy lửa -> Cập nhật mốc thời gian báo động mới nhất
             fireHoldTime = Date.now() + HOLD_DURATION;
         } else if (Date.now() < fireHoldTime) {
-            // AI không thấy lửa, nhưng vẫn đang trong thời gian 5 giây đếm ngược -> Ép bật cảnh báo
+            // AI không thấy lửa, nhưng vẫn đang trong thời gian 10 giây đếm ngược -> Ép bật cảnh báo
             finalHasFire = true;
             displayConf = "Đang duy trì"; 
         }

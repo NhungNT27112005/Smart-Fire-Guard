@@ -24,7 +24,7 @@ def detect():
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
     # Chạy AI nhận diện
-    results = model(img, conf=0.15)[0]
+    results = model(img, conf=0.15)[0]   # Sử dụng ngưỡng confidence là 0.15
 
     has_fire = False
     max_conf = 0.0
