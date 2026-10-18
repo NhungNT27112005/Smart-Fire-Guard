@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "sensor_data": {
+    "database_sha256": "40deca27a9ccbeea06992c3468a42812e2c9208b292eaca960dd8b0a68a348c6",
+    "wal_present": false,
+    "sensor_snapshot_sha256": "082b3c0332c6a9a42c6821483d370cfb8326588d497c5266112b90a0c087e4ee",
+    "sqlite_integrity": "ok",
+    "sensor_rows": 10657,
+    "event_rows": 9,
+    "sources": {
+      "SIMULATION": 10657
+    },
+    "stored_status_counts": {
+      "NORMAL": 10626,
+      "DANGER": 31
+    },
+    "danger_share": 0.0029088861780989022,
+    "timestamp_range_raw": {
+      "first": "2026-10-03 10:34:59",
+      "last": "2026-10-18 08:32:49"
+    },
+    "missing": {
+      "temperature": 0,
+      "smoke": 0,
+      "gas": 0,
+      "flame": 0,
+      "timestamp": 0,
+      "status": 0,
+      "source": 0
+    },
+    "ranges": {
+      "temperature": {
+        "min": 28.0,
+        "max": 88.0
+      },
+      "smoke": {
+        "min": 8.0,
+        "max": 98.0
+      },
+      "gas": {
+        "min": 3.0,
+        "max": 85.0
+      },
+      "flame": {
+        "min": 0,
+        "max": 1
+      }
+    },
+    "invalid_or_missing_sensor_values": {
+      "temperature": 0,
+      "smoke": 0,
+      "gas": 0,
+      "flame": 0
+    },
+    "invalid_timestamps": 0,
+    "duplicate_timestamps": 14,
+    "duplicate_sensor_vectors": 20,
+    "non_increasing_timestamp_steps": 14,
+    "gaps_over_10_seconds": 11,
+    "contiguous_danger_runs_by_row_order": 6,
+    "default_rule_status_matches": 10657,
+    "rule_consistency_is_not_model_evaluation": true,
+    "independent_ground_truth_present": false,
+    "independent_label_evidence": "No annotation table/manifest was supplied; status is an operational rule output, not adjudicated truth.",
+    "supervised_training_ready": false,
+    "blocking_reasons": [
+      "No independently adjudicated real-device event labels",
+      "No incident/session grouping for holdout splits",
+      "Simulation cannot establish real-world model effectiveness"
+    ]
+  },
+  "checkpoint": {
+    "file": "best.pt",
+    "bytes": 24483111,
+    "sha256": "ce0bd6adac82656d43db43676b60c95d6eb6729782a6ead7fe9565097ad0f25b",
+    "inspection": "static_pickle_instructions_only",
+    "executed": false,
+    "provenance_verified": false,
+    "runtime_verified": false,
+    "declared_class_names": {
+      "0": "fire",
+      "1": "smoke"
+    }
+  },
+  "training_performed": false,
+  "model_evaluation_metrics": null,
+  "vision_dataset_present": false,
+  "conclusion": "Insufficient evidence for supervised training or deployment performance claims"
+}

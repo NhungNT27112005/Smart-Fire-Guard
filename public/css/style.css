@@ -1332,3 +1332,7 @@ input:invalid:not(:placeholder-shown){
     scroll-behavior:auto!important
   }
 }
+
+.auth-overlay {position:fixed;inset:0;z-index:100;background:var(--bg);display:grid;place-items:center;padding:24px;}
+.auth-card {width:100%;max-width:420px;padding:32px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 18px 60px #0001;}
+.auth-card h1 {font-size:25px;}

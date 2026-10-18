@@ -4,6 +4,20 @@
   const $ = id => document.getElementById(id);
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const finite = value => typeof value === 'number' && Number.isFinite(value);
+  const aiFailureText = reason => ({
+    MODEL_NOT_TRUSTED:'Model chưa được xác minh để nạp. Kiểm tra chế độ nạp AI.',
+    MODEL_MISSING:'Không tìm thấy file model. Kiểm tra AI_MODEL_PATH.',
+    MODEL_LOAD_FAILED:'Không nạp được model. Kiểm tra trọng số và phiên bản thư viện.',
+    MODEL_CLASS_MISMATCH:'Model không có đủ hai lớp fire và smoke.',
+    RESTRICTED_LOADER_UNAVAILABLE:'Thư viện chưa hỗ trợ chế độ nạp giới hạn. AI tiếp tục tạm ngưng.',
+    AI_TIMEOUT:'AI xử lý quá thời gian cho phép.',
+    AI_BUSY:'AI đang bận; chờ khung hình tiếp theo.',
+    STALE_FRAME:'Ảnh đã cũ hoặc đồng hồ hệ thống chưa khớp.',
+    STALE_RESULT:'Kết quả AI đã quá hạn.',
+    AI_STALE_RESULT:'Kết quả AI đã quá hạn.',
+    AI_UNAVAILABLE:'Chưa kết nối được service Python. Chạy npm run start:ai.',
+    AI_ERROR:'Service AI gặp lỗi xử lý ảnh.'
+  }[reason] || 'Không thể xử lý ảnh; kiểm tra service Python.');
   const clock = value => new Intl.DateTimeFormat('vi-VN', {hour:'2-digit',minute:'2-digit',second:'2-digit'}).format(new Date(value));
   const storage = {
     get(key, fallback) { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } },
@@ -30,7 +44,7 @@
   let theme = storage.get('fg-theme','system'), soundEnabled = storage.get('fg-sound','true') === 'true';
   let socket, audioCtx, oscillator, gain, stream = null, frameTimer = null, cameraEpoch = 0, cameraPending = false;
   let toastTimer, statusRequest = 0, stateRevision = 0, lastLogFetch = 0, previewReady = false, range = 60;
-  let telemetryStale = false;
+  let telemetryStale = false, csrfToken='', authenticated=false, currentUser=null, authRevision=0, devices=[];
 
   function badge(label, tone='neutral') { return `<span class="badge ${tone}">${escape(label)}</span>`; }
   function setBadge(id,label,tone) { const el=$(id); el.textContent=label; el.className=`badge ${tone}`; }
@@ -39,15 +53,15 @@
     clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('toast').hidden=true,5000);
   }
   // The legacy server may keep a hardware source label after falling back to simulation.
-  function isDemo(s=state) { return !!s && (s.source === 'SIMULATION' || s.esp32Connected !== true); }
+  function isDemo(s=state) { return !!s && (s.source === 'SIMULATION' || s.demo===true); }
   function sourceText(s=state) {
-    return !s ? 'Chưa có nguồn' : isDemo(s) ? 'DEMO · Giả lập' : s.source === 'ESP32_HARDWARE' ? 'ESP32 · Telemetry' : 'Nguồn chưa xác minh';
+    return !s ? 'Chưa có nguồn' : isDemo(s) ? 'DEMO · Giả lập' : s.source === 'ESP32_HARDWARE' ? 'ESP32 · Telemetry' : 'Chưa có nguồn';
   }
   function valid(metric,s=state) { const v=s?.[metric.key]; return finite(v) && v>=metric.range[0] && v<=metric.range[1]; }
   function fresh() {
     const ping=Date.parse(state?.lastEsp32Ping);
     const hardwareFresh=state?.esp32Connected!==true || (Number.isFinite(ping)&&Date.now()-ping<12000);
-    return serverOnline && lastReceived>0 && Date.now()-lastReceived<12000 && !telemetryStale && hardwareFresh;
+    return serverOnline && lastReceived>0 && Date.now()-lastReceived<12000 && !telemetryStale && hardwareFresh && state?.dataStale!==true;
   }
   function deviceOnline() {
     const ping=Date.parse(state?.lastEsp32Ping);
@@ -116,9 +130,11 @@
   async function request(path,options={}) {
     const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),8000);
     try {
-      const res=await fetch(path,{...options,signal:controller.signal,headers:{Accept:'application/json',...options.headers}});
-      if(!res.ok)throw Error(`Máy chủ trả lỗi HTTP ${res.status}`);
-      const data=await res.json(); if(data.success!==true)throw Error(data.error||'Phản hồi không hợp lệ');
+      const res=await fetch(path,{...options,credentials:'same-origin',signal:controller.signal,headers:{Accept:'application/json',...(csrfToken?{'X-CSRF-Token':csrfToken}:{}),...options.headers}});
+      const data=await res.json().catch(()=>({}));
+      if(res.status===401&&path!=='/api/auth/login')showLogin();
+      if(!res.ok)throw Error(data.error?.message||`Máy chủ trả lỗi HTTP ${res.status}`);
+      if(data.success!==true)throw Error(data.error?.message||'Phản hồi không hợp lệ');
       return data;
     } finally {clearTimeout(timeout);}
   }
@@ -129,6 +145,8 @@
       if(!data.state||typeof data.state!=='object')throw Error('Thiếu trạng thái hệ thống');
       // Thresholds are independent of telemetry; do not lose them when a socket update wins a race.
       if(data.thresholds&&metrics.every(m=>finite(data.thresholds[m.threshold]?.warn)&&finite(data.thresholds[m.threshold]?.danger))) thresholds=data.thresholds;
+      devices=Array.isArray(data.devices)?data.devices:devices;
+      if(data.capabilities)$('sim').disabled=!data.capabilities.demo;
       renderThresholds();
       if(revision!==stateRevision) {render();return;}
       serverOnline=true;
@@ -145,7 +163,7 @@
     const ping=Date.parse(next.lastEsp32Ping);
     telemetryStale=next.esp32Connected===true&&(!Number.isFinite(ping)||now-ping>=12000);
     state=next; lastReceived=now; stateRevision++;
-    if(record || !samples.length) {
+    if((record || !samples.length) && next.source!=='NONE' && next.dataStale!==true) {
       samples.push({...next,receivedAt:now,demo:isDemo(next)}); samples=samples.slice(-120);
     }
     render(); renderSamples(); renderCharts();
@@ -177,6 +195,8 @@
     // Avoid recreating the editable/focusable table button on every tick.
     $('device-row-name').textContent=deviceName; $('device-row-location').textContent=`${deviceLocation||'Chưa cung cấp vị trí'} · ESP32`;
     $('device-row-status').innerHTML=badge(deviceLabel,deviceTone); $('device-row-time').textContent=$('device-last-seen').textContent;
+    $('device-count').textContent=`${devices.length} thiết bị đã đăng ký`;
+    $('device-registry').innerHTML=devices.length?devices.map(d=>`<tr><td>${escape(d.name)}<span class="muted">${escape(d.id)}</span></td><td>${badge(d.connectionStatus,d.connectionStatus==='online'?'good':'neutral')}</td><td>${escape(d.location||'—')}</td><td>${badge(levels[d.state?.level]?.[0]||'Chưa xác định',levels[d.state?.level]?.[1]||'neutral')}</td></tr>`).join(''):'<tr><td colspan="4" class="empty-state">Chưa có thiết bị đã đăng ký. Admin tạo thiết bị qua API để cấp token.</td></tr>';
     $('sensor-health').innerHTML=metrics.map(m=>{
       const good=valid(m),status=!state?'Chưa có dữ liệu':!good?'Dữ liệu thiếu / không hợp lệ':!live?'Dữ liệu đã cũ':demo?'DEMO · Không phải cảm biến thật':'Dữ liệu hợp lệ';
       return `<div class="health-item"><strong>${m.label}</strong><br>${badge(status,!good&&state?'danger':live&&!demo?'good':'neutral')}<p>${m.key==='temperature'?'Miền kiểm tra UI: −40 đến 125°C.':'Miền kiểm tra UI: 0–100% tương đối.'}</p></div>`;
@@ -209,7 +229,7 @@
       const flush=()=>{if(!segment.length)return;svg+=`<polyline class="chart-line" stroke="${m.color}" ${segmentDemo?'stroke-dasharray="5 5"':''} points="${segment.join(' ')}"/>`;segment=[];};
       rows.forEach((s,i)=>{
         if(!valid(m,s)){flush();return;}
-        if(i&&(s.demo!==segmentDemo||s.receivedAt-rows[i-1].receivedAt>12000))flush();
+        if(i&&(s.demo!==segmentDemo||s.deviceId!==rows[i-1].deviceId||s.receivedAt-rows[i-1].receivedAt>12000))flush();
         segmentDemo=s.demo; segment.push(`${x(i).toFixed(1)},${y(s[m.key]).toFixed(1)}`);
         svg+=`<circle cx="${x(i)}" cy="${y(s[m.key])}" r="2" fill="${m.color}"><title>${escape(clock(s.receivedAt))} · ${m.label}: ${s[m.key]}${m.unit} · ${s.demo?'DEMO':'ESP32'}</title></circle>`;
       });flush();
@@ -238,12 +258,14 @@
   }
   async function fetchLogs() {
     if(logsBusy)return;logsBusy=true;renderLogs();
+    const revision=authRevision;
     try {
       const data=await request('/api/logs');
       if(!Array.isArray(data.logs)||data.logs.some(row=>!row||typeof row!=='object'))throw Error('Nhật ký trả về không hợp lệ');
+      if(revision!==authRevision)return;
       logs=data.logs;logError='';logLoaded=true;lastLogFetch=Date.now();
     } catch(err) {
-      logError=`Không tải được nhật ký: ${err.name==='AbortError'?'quá thời gian chờ':err.message}${logs.length?'. Đang hiển thị dữ liệu đã tải trước đó.':''}`;
+      if(revision===authRevision)logError=`Không tải được nhật ký: ${err.name==='AbortError'?'quá thời gian chờ':err.message}${logs.length?'. Đang hiển thị dữ liệu đã tải trước đó.':''}`;
     } finally {logsBusy=false;renderLogs();}
   }
   $('log-filter').onchange=renderLogs; $('logs-refresh').onclick=fetchLogs;
@@ -301,12 +323,12 @@
     } catch(err) {toast(`Thao tác thất bại: ${err.name==='AbortError'?'quá thời gian chờ; hãy kiểm tra trạng thái trước khi thử lại':err.message}`);}
     finally {button.disabled=false;}
   }
-  $('sim').onclick=()=>action($('sim'),'/api/simulate/fire','Kích hoạt DEMO cháy trên state chung của server? Nếu ESP32 đang kết nối, kết quả có thể ảnh hưởng lệnh còi trả về thiết bị.');
-  $('rst').onclick=()=>action($('rst'),'/api/reset','Reset sẽ thay số đo trên server bằng giá trị mặc định, kể cả khi thiết bị đang kết nối. Thao tác không chứng minh môi trường đã an toàn. Tiếp tục?');
+  $('sim').onclick=()=>action($('sim'),'/api/simulate/fire','Kích hoạt phiên DEMO cháy? Telemetry và lệnh còi của thiết bị thật được giữ riêng.');
+  $('rst').onclick=()=>action($('rst'),'/api/reset','Kết thúc DEMO và trở lại giám sát thiết bị thật? Số đo thật không bị thay đổi.');
   $('clear-log-btn').onclick=()=>action($('clear-log-btn'),'/api/logs/clear','Xóa nhật ký cảnh báo trên server cho mọi người dùng? Dữ liệu cảm biến không bị xóa.');
   $('refresh').onclick=async()=>{$('refresh').disabled=true;try{await Promise.all([fetchStatus(),fetchLogs()]);}finally{$('refresh').disabled=false;}};
   $('export-samples').onclick=()=>{
-    const csv=['received_at,temperature_c,smoke_relative_pct,gas_relative_pct,flame,source',...samples.map(s=>[new Date(s.receivedAt).toISOString(),...['temperature','smoke','gas'].map(k=>finite(s[k])?s[k]:''),s.flame===true?1:s.flame===false?0:'',s.demo?'DEMO':'ESP32_HARDWARE'].join(','))].join('\r\n');
+    const csv=['received_at,temperature_c,smoke_relative_pct,gas_relative_pct,flame,source,device_id',...samples.map(s=>[new Date(s.receivedAt).toISOString(),...['temperature','smoke','gas'].map(k=>finite(s[k])?s[k]:''),s.flame===true?1:s.flame===false?0:'',s.demo?'DEMO':s.source==='ESP32_HARDWARE'?'ESP32_HARDWARE':'UNKNOWN',/^[a-zA-Z0-9_-]+$/.test(s.deviceId||'')?s.deviceId:''].join(','))].join('\r\n');
     const url=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'})),a=document.createElement('a');
     a.href=url;a.download='fireguard-session.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
@@ -326,7 +348,7 @@
       if(epoch!==cameraEpoch){next.getTracks().forEach(t=>t.stop());return;}
       stream=next;cameraPending=false;const video=$('localWebcam');video.srcObject=stream;await video.play();if(epoch!==cameraEpoch)return;
       video.hidden=false;$('camera-placeholder').hidden=true;$('camera-toggle').textContent='Tắt camera';
-      $('camera-status').textContent='Webcam đang bật · AI DEMO: chờ kết quả mô phỏng.';
+      $('camera-status').textContent='Webcam đang bật · Đang chờ kết quả Python AI.';
       const canvas=document.createElement('canvas');
       frameTimer=setInterval(()=>{
         if(!socket?.connected||video.readyState<2)return;const width=Math.min(640,video.videoWidth);if(!width)return;
@@ -343,19 +365,58 @@
   window.addEventListener('pagehide',stopCamera);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCamera();});
   if(typeof window.io==='function') {
-    socket=window.io();
-    socket.on('connect',()=>{serverOnline=true;fetchStatus();fetchLogs();});
+    socket=window.io({autoConnect:false});
+    socket.on('connect',()=>{if(authenticated){serverOnline=true;fetchStatus();fetchLogs();}});
     socket.on('disconnect',()=>{serverOnline=false;stateRevision++;render();if(stream)$('camera-status').textContent='Mất kết nối máy chủ. Webcam còn mở, không gửi ảnh; bạn có thể tắt camera.';});
     socket.on('connect_error',()=>{serverOnline=false;render();});
     socket.on('sensor_update',payload=>{
-      if(payload?.state&&typeof payload.state==='object'){serverOnline=true;acceptState(payload.state);if(Date.now()-lastLogFetch>10000)fetchLogs();}
+      if(authenticated&&payload?.state&&typeof payload.state==='object'){
+        if(Array.isArray(payload.devices))devices=payload.devices;
+        if(payload.thresholds){thresholds=payload.thresholds;renderThresholds();}
+        serverOnline=true;acceptState(payload.state,['esp32_post','simulate_fire','reset_demo'].includes(payload.reason));if(Date.now()-lastLogFetch>10000)fetchLogs();
+      }
     });
     socket.on('logs_cleared',fetchLogs);
+    socket.on('alerts_changed',fetchLogs);
     socket.on('ai_result',result=>{
-      if(stream&&typeof result?.hasFire==='boolean')$('camera-status').textContent=`DEMO · AI mô phỏng: ${result.hasFire?'Có nguy cơ cháy':'Không phát hiện'}${finite(Number(result.confidence))?' · độ tin cậy giả lập '+Number(result.confidence).toFixed(1)+'%':''}. Chưa kết nối YOLO.`;
+      if(stream)$('camera-status').textContent=result?.available===false?`AI không khả dụng · ${aiFailureText(result.reason)}${result.held?' Đang giữ cảnh báo quan sát trước đó.':''} Luật cảm biến vẫn hoạt động.`:`${result?.demo?'DEMO · ':''}AI: ${result?.held?'Đang duy trì cảnh báo trước đó':result?.hasFire?'Phát hiện nguy cơ':'Không phát hiện trong ảnh'}${finite(result?.confidence)?' · điểm phát hiện '+result.confidence.toFixed(1)+'% (không phải xác suất cháy)':''}. Mô hình thử nghiệm chưa được đánh giá; chỉ hỗ trợ quan sát, không thay thế luật cảm biến.`;
     });
+    socket.on('ai_error',result=>{if(stream)$('camera-status').textContent=`AI: ${result.message||'Không thể xử lý ảnh'}`;});
   } else {toast('Không tải được Socket.IO. Đang dùng cập nhật HTTP định kỳ.');}
-  render();renderCharts();renderSamples();renderThresholds();renderLogs();fetchStatus();fetchLogs();
+  function showLogin() {
+    authenticated=false;currentUser=null;csrfToken='';authRevision++;stateRevision++;serverOnline=false;
+    socket?.disconnect?.();stopCamera();state=null;devices=[];samples=[];logs=[];lastReceived=0;logLoaded=false;
+    $('auth-overlay').hidden=false;$('logout').hidden=true;
+    render();renderCharts();renderSamples();renderLogs();
+  }
+  async function establishSession() {
+    try {
+      const data=await request('/api/auth/me');
+      if(!data.user?.role||typeof data.csrfToken!=='string')throw Error('Phiên đăng nhập không hợp lệ');
+      currentUser=data.user;csrfToken=data.csrfToken;authenticated=true;authRevision++;
+      $('auth-overlay').hidden=true;$('logout').hidden=false;$('user-role').textContent=currentUser.role;
+      $('save-thresholds').hidden=currentUser.role!=='admin';
+      $('clear-log-btn').disabled=currentUser.role!=='admin';
+      $('rst').disabled=currentUser.role==='viewer';$('camera-toggle').disabled=currentUser.role==='viewer';
+      socket?.connect?.();await Promise.all([fetchStatus(),fetchLogs()]);
+      if(currentUser?.role==='viewer')$('sim').disabled=true;
+    } catch(err) {showLogin();$('login-error').textContent=err.message;}
+  }
+  $('login-form').onsubmit=async e=>{
+    e.preventDefault();$('login-submit').disabled=true;$('login-error').textContent='';
+    try {await request('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('login-username').value,password:$('login-password').value})});$('login-password').value='';await establishSession();}
+    catch(err){$('login-error').textContent=err.message;}
+    finally{$('login-submit').disabled=false;}
+  };
+  $('logout').onclick=async()=>{try{await request('/api/auth/logout',{method:'POST'});showLogin();}catch(err){toast(err.message);}};
+  $('save-thresholds').onclick=async()=>{
+    const proposed={};for(const m of metrics)proposed[m.threshold]={warn:Number($(`${m.key}-warn`).value),danger:Number($(`${m.key}-danger`).value)};
+    if(!window.confirm('Lưu ngưỡng lên máy chủ và đánh giá lại cảnh báo của mọi thiết bị?'))return;
+    $('save-thresholds').disabled=true;
+    try{await request('/api/thresholds',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(proposed)});await fetchStatus();toast('Đã lưu ngưỡng lên server.');}
+    catch(err){toast(err.message);}finally{$('save-thresholds').disabled=false;}
+  };
+  render();renderCharts();renderSamples();renderThresholds();renderLogs();establishSession();
   setInterval(render,3000);
-  setInterval(()=>{if(!document.hidden){fetchStatus();if(!socket?.connected)fetchLogs();}},10000);
+  setInterval(()=>{if(authenticated&&!document.hidden){fetchStatus();if(!socket?.connected)fetchLogs();}},10000);
 })();

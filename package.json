@@ -5,7 +5,14 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "start:ai": "node scripts/start-ai.cjs",
+    "dev": "node server.js",
+    "test": "node --test --test-isolation=none tests/*.test.cjs",
+    "test:integration": "node --test --test-isolation=none tests/backend.integration.test.cjs",
+    "preview": "node tests/preview-server.cjs",
+    "test:ai": "python -m unittest discover -s tests -p test_ai_service.py -v",
+    "test:ml": "python -m unittest discover -s tests -p test_*.py -v",
+    "audit:ai": "python ai/audit_data.py --output docs/AI_DATA_AUDIT.json"
   },
   "keywords": [
     "iot",
@@ -19,9 +26,12 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "socket.io": "^4.8.1",
-    "sqlite3": "^5.1.7"
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.4",
+    "sqlite3": "^6.0.1"
+  },
+  "engines": {
+    "node": ">=22.16.0"
   }
 }

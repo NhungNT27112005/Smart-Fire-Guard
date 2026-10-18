@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "artifact": "best.pt",
+  "sha256": "ce0bd6adac82656d43db43676b60c95d6eb6729782a6ead7fe9565097ad0f25b",
+  "bytes": 24483111,
+  "task": "candidate_fire_smoke_object_detection",
+  "declared_class_names": {"0": "fire", "1": "smoke"},
+  "class_evidence": "Static data.pkl opcode inspection, not model execution",
+  "architecture_verified": false,
+  "training_dataset": null,
+  "training_provenance_verified": false,
+  "license_verified": false,
+  "runtime_verified": true,
+  "runtime_verification": {
+    "date": "2026-10-18",
+    "loading_mode": "restricted_weights_only",
+    "ultralytics": "8.4.174",
+    "torch": "2.14.1",
+    "checks": ["Synthetic blank JPEG returned no_detection", "One public-domain campfire photo returned fire detections"],
+    "photo_source": "https://commons.wikimedia.org/wiki/File:Fire.jpg",
+    "not_performance_evaluation": true
+  },
+  "validation_status": "unvalidated_candidate",
+  "real_world_evaluation": null,
+  "precision": null,
+  "recall": null,
+  "f1": null,
+  "confusion_matrix": null,
+  "confidence_threshold": 0.15,
+  "threshold_status": "Inherited experimental cutoff, not selected on an independent validation set",
+  "confidence_is_calibrated_fire_probability": false,
+  "approved_for_automatic_hardware_alarm_control": false,
+  "intended_use": "Optional human-reviewed camera advisory after source/code trust review",
+  "limitations": [
+    "No images, annotations, held-out scenes or training report were supplied",
+    "Unknown pretrained data overlap makes test contamination impossible to rule out",
+    "Sensor status labels are rule-derived and all current sensor records are SIMULATION",
+    "Vision detections indicate present visual evidence, not a causal forecast of future fire",
+    "Negative or unavailable AI must not clear a sensor alarm"
+  ]
+}

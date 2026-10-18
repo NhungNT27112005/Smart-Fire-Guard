@@ -1,17 +1,17 @@
-﻿const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const express=require('express'),{Server}=require('socket.io'),http=require('node:http');
-const app=express(),server=http.createServer(app),io=new Server(server);
-const events=[],readings=[];
-const db={saveEventLog:async(level,message)=>events.unshift({id:events.length+1,level,message,formatted_time:new Date().toISOString()}),saveSensorReading:async row=>readings.push(row),getRecentLogs:async()=>events.slice(0,50),clearLogs:async()=>{events.length=0;}};
-const moduleCopy={exports:{}};
-const projectRoot=path.resolve(__dirname,'..');
-vm.runInNewContext(fs.readFileSync(path.join(projectRoot,'src/routes/api.js'),'utf8'),{module:moduleCopy,require:n=>n==='express'?express:n==='../database'?db:require(path.join(projectRoot,'src/ai-detector.js')),console,Date,Math});
-const api=moduleCopy.exports(io);
-app.use(express.json());app.use(express.static(path.join(projectRoot,'public')));app.use('/api',api);
-const timer=setInterval(()=>api.tickSimulation().catch(console.error),1500);
-io.on('connection',socket=>socket.on('analyze_ai_frame',()=>socket.emit('ai_result',{hasFire:false,confidence:80})));
-// Explicit testing controls: only bound to localhost, all events/readings are disposable in-memory data.
-app.post('/__test/invalid',(req,res)=>{io.emit('sensor_update',{state:{temperature:null,gas:-1,smoke:'invalid',flame:null,level:'ok',source:'SIMULATION',esp32Connected:false}});res.json({success:true});});
-server.listen(4318,'127.0.0.1',()=>console.log('Isolated DEMO preview http://localhost:4318 - database is NOT opened'));
-function close(){clearInterval(timer);io.close();server.close();}
-process.on('SIGINT',()=>{close();process.exit(0);});process.on('SIGTERM',()=>{close();process.exit(0);});
+'use strict';
+// Disposable authenticated DEMO. The production database and .env are never opened.
+const {randomBytes}=require('node:crypto');
+const {createApplication}=require('../src/app');
+const {loadConfig}=require('../src/config');
+async function main() {
+  const password=randomBytes(18).toString('base64url');
+  const config=loadConfig({DATABASE_PATH:':memory:',PORT:'4318',HOST:'127.0.0.1',DEMO_ENABLED:'true',BOOTSTRAP_ADMIN_USERNAME:'demo-admin',BOOTSTRAP_ADMIN_PASSWORD:password});
+  const runtime=await createApplication({config});
+  await runtime.start();
+  const user=await runtime.db.read(tx=>tx.get('SELECT id FROM users WHERE username=?',['demo-admin']));
+  await runtime.monitoring.simulate(user.id);
+  console.log('Disposable DEMO preview: http://localhost:4318');
+  console.log(`Username: demo-admin | One-run preview password: ${password}`);
+  for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>runtime.close().then(()=>process.exit(0)));
+}
+main().catch(err=>{console.error(err.message);process.exitCode=1;});

@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.tmp/
+coverage/
+*.log
+__pycache__/
+*.pyc
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.backup*
+esp32/**/secrets.h
+datasets/
+ai/runs/
+ai/artifacts/

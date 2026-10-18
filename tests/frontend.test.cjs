@@ -55,14 +55,14 @@ function harness({httpError=false, socketEnabled=true}={}) {
     document,window,location:{origin:'http://localhost:4318',hash:''},navigator:{},
     localStorage:{getItem:k=>persisted.get(k)??null,setItem:(k,v)=>persisted.set(k,v)},
     setTimeout:()=>1,clearTimeout(){},setInterval:fn=>{intervals.push(fn);return intervals.length;},clearInterval(){},
-    fetch:async url=>({ok:!fail,status:fail?503:200,json:async()=>url==='/api/status'?{success:true,thresholds:limits,state:{temperature:0,smoke:0,gas:0,flame:false,level:'ok',source:'SIMULATION',esp32Connected:false}}:{success:true,logs:[]}}),
+    fetch:async url=>({ok:url==='/api/auth/me'||!fail,status:url==='/api/auth/me'?200:fail?503:200,json:async()=>url==='/api/auth/me'?{success:true,user:{id:'test-admin',username:'admin',role:'admin'},csrfToken:'test-csrf'}:url==='/api/status'?{success:true,thresholds:limits,state:{temperature:0,smoke:0,gas:0,flame:false,level:'ok',source:'SIMULATION',esp32Connected:false}}:{success:true,logs:[]}}),
     AbortController,Date:FakeDate,Intl,console,URL,Blob
   };
   // Expose closures only in the VM copy, leaving the shipped browser script unchanged.
   vm.runInNewContext(script.replace(/\}\)\(\);\s*$/, `globalThis.qa={render,renderCharts,renderLogs,acceptState,overall,fetchStatus,fetchLogs,sourceText,
-    get samples(){return samples;},set logs(value){logs=value;},set server(value){serverOnline=value;}};})();`),context);
+    get samples(){return samples;},set logs(value){logs=value;},set server(value){serverOnline=value;},set camera(value){stream=value;}};})();`),context);
   return {context,ui:id=>elements.get(id),callbacks,intervals,persisted,listeners,
-    api:context.qa,advance:ms=>{now+=ms;},setFailure:value=>{fail=value;},settle:async()=>{for(let i=0;i<12;i++)await Promise.resolve();}};
+    api:context.qa,advance:ms=>{now+=ms;},setFailure:value=>{fail=value;},settle:async()=>{for(let i=0;i<40;i++)await Promise.resolve();}};
 }
 
 test('HTML routes and static assets exist; no garbled Vietnamese or duplicate IDs',()=>{
@@ -163,4 +163,16 @@ test('camera unsupported state and cancelled control actions do not transmit req
   assert.match(h.ui('camera-status').textContent,/Không thể truy cập webcam/);
   await h.ui('sim').onclick();await h.ui('rst').onclick();await h.ui('clear-log-btn').onclick();
   assert.equal(posts,0);
+});
+
+test('camera distinguishes model readiness failures, disconnected service and real inference status',async()=>{
+  const h=harness();await h.settle();h.api.camera={};
+  h.callbacks.ai_result({available:false,reason:'MODEL_NOT_TRUSTED'});
+  assert.match(h.ui('camera-status').textContent,/Model chưa được xác minh/);
+  h.callbacks.ai_result({available:false,reason:'AI_UNAVAILABLE'});
+  assert.match(h.ui('camera-status').textContent,/npm run start:ai/);
+  h.callbacks.ai_result({available:true,hasFire:false,confidence:0});
+  assert.match(h.ui('camera-status').textContent,/Không phát hiện trong ảnh/);
+  assert.match(h.ui('camera-status').textContent,/chưa được đánh giá/);
+  assert.doesNotMatch(h.ui('camera-status').textContent,/AI không khả dụng/);
 });
